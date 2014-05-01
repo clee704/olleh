@@ -160,10 +160,6 @@ def format_quota_used(info):
     return '{} / {}'.format(formatter(info['used']), formatter(info['quota']))
 
 
-def indent(s):
-    return 
-
-
 @click.group()
 @click.option('--debug/--no-debug', default=False)
 @click.option('--username', required=True, prompt=True,
