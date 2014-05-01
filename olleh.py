@@ -7,7 +7,7 @@ import logging
 import pprint
 import re
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta
 from threading import Lock
 
 import click
@@ -58,9 +58,11 @@ class Browser(object):
         resp = self.session.post(
             'https://my.olleh.com:444/usage/TelTotalUseTimeAjax.action',
             data={'userDate': month.to_date()})
+        logging.debug('url=%s, body=%s', resp.request.url, resp.request.body)
         json = resp.json()
         logging.debug(pprint.pformat(json))
         usage_info = {'month': str(month), 'usage': []}
+        usage_list = []
         try:
             raw_usage_info = list(
                 json['freeUseMblBillPrevThsUseQnttListInquiryResponse']
@@ -69,9 +71,20 @@ class Browser(object):
             logging.debug('No data for %s', month)
             return usage_info
         try:
-            usage_info['usage'] = convert_usage_info(raw_usage_info)
+            usage_list = convert_usage_info(raw_usage_info, month)
         except RuntimeError:
-            return
+            return usage_info
+        try:
+            raw_usage_info2 = list(
+                json['totalUseMblBillPrevThsUseQnttListInquiryResponse']
+                    ['dst_M_MBL_DRCT_USE_QNTT_LIST'])
+            for row in raw_usage_info2:
+                check_for_sanity(row)
+        except RuntimeError:
+            return usage_info
+        except (KeyError, TypeError):
+            pass
+        usage_info['usage'] = usage_list
         return usage_info
 
 
@@ -83,29 +96,29 @@ class Month(object):
                 raise ValueError
             year = int(s[:4])
             month = int(s[5:7])
-            self.d = date(year, month, calendar.monthrange(year, month)[-1])
+            self.date = date(year, month, calendar.monthrange(year, month)[-1])
         except (TypeError, ValueError, calendar.IllegalMonthError):
             raise RuntimeError(('Invalid argument for Month: {!r} '
                                 '(must be in YYYY-MM format)').format(s))
 
     def to_date(self):
-        return self.d.strftime('%Y%m%d')
+        return self.date.strftime('%Y%m%d')
 
     def next_month(self):
-        if self.d.month == 12:
-            y, m = self.d.year + 1, 1
+        if self.date.month == 12:
+            y, m = self.date.year + 1, 1
         else:
-            y, m = self.d.year, self.d.month + 1
+            y, m = self.date.year, self.date.month + 1
         return Month('{:04d}-{:02d}'.format(y, m))
 
     def __le__(self, other):
-        return self.d <= other.d
+        return self.date <= other.date
 
     def __repr__(self):
-        return "Month('{:%Y-%m}')".format(self.d)
+        return "Month('{:%Y-%m}')".format(self.date)
 
     def __str__(self):
-        return self.d.strftime('%Y-%m')
+        return self.date.strftime('%Y-%m')
 
 
 type_names = {
@@ -114,22 +127,23 @@ type_names = {
     'P': 'data',
 }
 unit_converters = {
-    'voice': lambda n: (n // 60, n % 60),  # (minutes, seconds)
     'data': lambda n: n // 2 // 1024,     # megabytes
 }
 unit_formatters = {
-    'voice': lambda n: '{}m {}s'.format(n[0], n[1]),
+    'voice': lambda n: '{}m {}s'.format(n // 60, n % 60),
     'data': lambda n: '{} MB'.format(n),
 }
 identity = lambda n: n
 
 
-def convert_usage_info(raw_info):
+def convert_usage_info(raw_info, month):
     info = []
     for row in raw_info:
+        check_for_sanity(row, month)
         type_ = row.get('bun_GUN')
         if type_ not in type_names:
-            raise RuntimeError('Unexpected type: {!r}'.format(type_))
+            logging.debug('Unexpected type: %r', type_)
+            continue
         type_name = type_names[type_]
         converter = unit_converters.get(type_name, identity)
         try:
@@ -141,8 +155,24 @@ def convert_usage_info(raw_info):
             }
         except (KeyError, TypeError, ValueError):
             logging.debug('Unexpected data structure', exc_info=True)
+            continue
         info.append(d)
     return info
+
+
+def check_for_sanity(row, month):
+    if 'last_CALL_SEIZURE_DT' in row:
+        # Sometimes the API server gives incorrect data (gives data for 6
+        # months in the future from the given month)
+        try:
+            dt = datetime.strptime(row['last_CALL_SEIZURE_DT'],
+                                   '%Y%m%d%H%M%S')
+            if month.date + timedelta(days=30) < dt.date():
+                logging.debug(('Requested for data for {}, but got '
+                               'last_CALL_SEIZURE_DT {}').format(month, dt))
+                raise RuntimeError
+        except ValueError:
+            pass
 
 
 def format_usage_info(info, format):
