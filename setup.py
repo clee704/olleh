@@ -1,10 +1,12 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name='olleh',
+    author='Choongmin Lee',
+    author_email='choongmin@me.com',
     version='0.1',
-    packages=find_packages(),
-    include_package_data=True,
+    description='A command line tool to fetch usage data from olleh.com.',
+    py_modules=['olleh'],
     install_requires=[
         'click==0.1',
         'requests==2.2.1',

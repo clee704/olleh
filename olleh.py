@@ -6,6 +6,7 @@ import json
 import logging
 import pprint
 import re
+import sys
 from datetime import date
 from threading import Lock
 
@@ -13,12 +14,16 @@ import click
 import requests
 
 
-def login_required(method):
-    @functools.wraps(method)
+class LoginError(RuntimeError):
+    pass
+
+
+def login_required(f):
+    @functools.wraps(f)
     def wrapper(self, *args, **kwargs):
         if not self.logged_in:
             self.login()
-        return method(self, *args, **kwargs)
+        return f(self, *args, **kwargs)
     return wrapper
 
 
@@ -41,7 +46,7 @@ class Browser(object):
             resp = self.session.post(url, data={'userId': self.username,
                                                 'password': self.password})
             if resp.url != 'http://www.olleh.com':
-                raise RuntimeError('login failed')
+                raise LoginError
                 logging.debug('Login failed; response was:')
                 logging.debug(resp.content)
             logging.debug('You are now logged in')
@@ -162,10 +167,8 @@ def format_quota_used(info):
 
 @click.group()
 @click.option('--debug/--no-debug', default=False)
-@click.option('--username', required=True, prompt=True,
-              help='olleh.com username')
-@click.option('--password', required=True, prompt=True, hide_input=True,
-              help='olleh.com password')
+@click.option('--username', help='olleh.com username')
+@click.option('--password', help='olleh.com password')
 @click.pass_context
 def cli(ctx, debug, username, password):
     """Unofficial command line tool for olleh.com. To avoid typing username
@@ -176,8 +179,20 @@ def cli(ctx, debug, username, password):
     """
     if debug:
         logging.basicConfig(level=logging.DEBUG)
-    browser = Browser(username, password)
-    ctx.obj = browser
+    ctx.obj = Browser(username, password)
+
+
+def catch_login_error(f):
+    @functools.wraps(f)
+    @click.pass_context
+    def wrapper(ctx, *args, **kwargs):
+        try:
+            return ctx.invoke(f, *args, **kwargs)
+        except LoginError:
+            print('Login failed (username: {!r})'.format(ctx.obj.username),
+                  file=sys.stderr)
+            ctx.exit(1)
+    return wrapper
 
 
 @cli.command(short_help='print your mobile phone usage')
@@ -187,6 +202,7 @@ def cli(ctx, debug, username, password):
 @click.option('--format', type=click.Choice(['human', 'json']),
               default='human')
 @click.pass_obj
+@catch_login_error
 def usage(browser, month, from_month, format):
     """Prints the usage information for the given month or for the given
     range of months if --from-month is specified. The month must be specified
