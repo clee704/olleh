@@ -4,7 +4,7 @@ setup(
     name='olleh',
     author='Choongmin Lee',
     author_email='choongmin@me.com',
-    version='0.1',
+    version='0.1.1',
     description='A command line tool to fetch usage data from olleh.com.',
     py_modules=['olleh'],
     install_requires=[
