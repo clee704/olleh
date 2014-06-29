@@ -15,5 +15,15 @@ setup(
         'console_scripts': [
             'olleh=olleh:main',
         ],
-    }
+    },
+    classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Environment :: Console',
+        'Intended Audience :: Developers',
+        'Intended Audience :: End Users/Desktop',
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Topic :: Utilities',
+    ],
 )
