@@ -201,8 +201,9 @@ def format_quota_used(info, show_remaining):
 @click.group()
 @click.option('--debug/--no-debug', default=False)
 def cli(debug):
-    """Unofficial command line tool for olleh.com. To avoid typing username
-    and password every time or to automate the script, you can set environment
+    """
+    Unofficial command line tool for olleh.com. To avoid typing username and
+    password every time you invoke this script, you can set environment
     variables OLLEH_USERNAME and OLLEH_PASSWORD.
 
     """
@@ -262,9 +263,10 @@ def browser_option(f):
 @browser_option
 @pass_browser
 def usage(browser, month, from_month, format, remaining):
-    """Prints the usage information for the given month or for the given
-    range of months if --from-month is specified. The month must be specified
-    in YYYY-MM format (e.g. "2014-05" for May 2014).
+    """
+    Prints the usage information for the given month or for the given range of
+    months if --from-month is specified. The month must be specified in YYYY-MM
+    format (e.g. "2014-05" for May 2014).
 
     """
     if from_month is not None:
