@@ -8,8 +8,8 @@ setup(
     description='A command line tool to fetch usage data from olleh.com.',
     py_modules=['olleh'],
     install_requires=[
-        'click==0.1',
-        'requests==2.2.1',
+        'click==2.2',
+        'requests==2.3.0',
     ],
     entry_points={
         'console_scripts': [

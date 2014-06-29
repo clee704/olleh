@@ -198,8 +198,10 @@ def format_quota_used(info):
 
 @click.group()
 @click.option('--debug/--no-debug', default=False)
-@click.option('--username', help='olleh.com username')
-@click.option('--password', help='olleh.com password')
+@click.option('--username', metavar='USERNAME', prompt=True,
+              help='olleh.com username')
+@click.option('--password', metavar='PASSWORD', prompt=True, hide_input=True,
+              help='olleh.com password')
 @click.pass_context
 def cli(ctx, debug, username, password):
     """Unofficial command line tool for olleh.com. To avoid typing username
