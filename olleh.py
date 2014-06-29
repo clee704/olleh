@@ -30,7 +30,7 @@ def login_required(f):
 
 class Browser(object):
 
-    def __init__(self, username, password):
+    def __init__(self, username=None, password=None):
         self.session = requests.Session()
         self.username = username
         self.password = password
@@ -200,34 +200,55 @@ def format_quota_used(info, show_remaining):
 
 @click.group()
 @click.option('--debug/--no-debug', default=False)
-@click.option('--username', metavar='USERNAME', prompt=True,
-              help='olleh.com username')
-@click.option('--password', metavar='PASSWORD', prompt=True, hide_input=True,
-              help='olleh.com password')
-@click.pass_context
-def cli(ctx, debug, username, password):
+def cli(debug):
     """Unofficial command line tool for olleh.com. To avoid typing username
     and password every time or to automate the script, you can set environment
-    variables OLLEH_USERNAME and OLLEH_PASSWORD. Actually every parameter to
-    this tool can be set from environment variables prefixed "OLLEH_".
+    variables OLLEH_USERNAME and OLLEH_PASSWORD.
 
     """
     if debug:
         logging.basicConfig(level=logging.DEBUG)
-    ctx.obj = Browser(username, password)
 
 
-def catch_login_error(f):
-    @functools.wraps(f)
-    @click.pass_context
-    def wrapper(ctx, *args, **kwargs):
-        try:
-            return ctx.invoke(f, *args, **kwargs)
-        except LoginError:
-            print('Login failed (username: {!r})'.format(ctx.obj.username),
-                  file=sys.stderr)
-            ctx.exit(1)
-    return wrapper
+pass_browser = click.make_pass_decorator(Browser, ensure=True)
+
+
+def browser_option(f):
+
+    def username_callback(ctx, param, value):
+        browser = ctx.ensure_object(Browser)
+        browser.username = value
+        return browser
+
+    def password_callback(ctx, param, value):
+        browser = ctx.ensure_object(Browser)
+        browser.password = value
+        return browser
+
+    def catch_login_error(f):
+        @functools.wraps(f)
+        @click.pass_context
+        def wrapper(ctx, *args, **kwargs):
+            try:
+                return ctx.invoke(f, *args, **kwargs)
+            except LoginError:
+                print('Login failed (username: {!r})'.format(ctx.obj.username),
+                      file=sys.stderr)
+                ctx.exit(1)
+        return wrapper
+
+    username_option = click.option('--username', metavar='USERNAME',
+                                   envvar='OLLEH_USERNAME',
+                                   prompt=True, expose_value=False,
+                                   callback=username_callback,
+                                   help='olleh.com username')
+    password_option = click.option('--password', metavar='PASSWORD',
+                                   envvar='OLLEH_PASSWORD',
+                                   prompt=True, hide_input=True,
+                                   expose_value=False,
+                                   callback=password_callback,
+                                   help='olleh.com password')
+    return username_option(password_option(catch_login_error(f)))
 
 
 @cli.command(short_help='print your mobile phone usage')
@@ -238,8 +259,8 @@ def catch_login_error(f):
               default='human')
 @click.option('--remaining', is_flag=True, default=False,
               help='Show remaining quota instead of used (for --format human)')
-@click.pass_obj
-@catch_login_error
+@browser_option
+@pass_browser
 def usage(browser, month, from_month, format, remaining):
     """Prints the usage information for the given month or for the given
     range of months if --from-month is specified. The month must be specified
@@ -271,7 +292,7 @@ def usage(browser, month, from_month, format, remaining):
 
 
 def main():
-    cli(auto_envvar_prefix='OLLEH')
+    cli()
 
 
 if __name__ == '__main__':
