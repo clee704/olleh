@@ -176,7 +176,7 @@ def check_for_sanity(row, month):
             pass
 
 
-def format_usage_info(info, format):
+def format_usage_info(info, format, show_remaining):
     if format == 'json':
         return json.dumps(info, indent=2)
     elif format == 'human':
@@ -185,15 +185,17 @@ def format_usage_info(info, format):
             output.append('  No data')
         for row in info['usage']:
             output.append(u'  {} {}'.format(row['type'].capitalize(),
-                                            format_quota_used(row)))
+                                            format_quota_used(row,
+                                                              show_remaining)))
         return '\n'.join(output)
     else:
         raise RuntimeError('Unsupported format: {!r}'.format(format))
 
 
-def format_quota_used(info):
+def format_quota_used(info, show_remaining):
     formatter = unit_formatters.get(info['type'], identity)
-    return '{} / {}'.format(formatter(info['used']), formatter(info['quota']))
+    val = info['used'] if not show_remaining else info['quota'] - info['used']
+    return '{} / {}'.format(formatter(val), formatter(info['quota']))
 
 
 @click.group()
@@ -234,9 +236,11 @@ def catch_login_error(f):
 @click.option('--from-month', type=Month, metavar='YYYY-MM')
 @click.option('--format', type=click.Choice(['human', 'json']),
               default='human')
+@click.option('--remaining', is_flag=True, default=False,
+              help='Show remaining quota instead of used (for --format human)')
 @click.pass_obj
 @catch_login_error
-def usage(browser, month, from_month, format):
+def usage(browser, month, from_month, format, remaining):
     """Prints the usage information for the given month or for the given
     range of months if --from-month is specified. The month must be specified
     in YYYY-MM format (e.g. "2014-05" for May 2014).
@@ -246,7 +250,8 @@ def usage(browser, month, from_month, format):
         def generate_formatted_strings():
             m = from_month
             while m <= month:
-                yield format_usage_info(browser.get_usage_info(m), format)
+                yield format_usage_info(browser.get_usage_info(m), format,
+                                        remaining)
                 m = m.next_month()            
         if format == 'json':
             print('[')
@@ -261,7 +266,8 @@ def usage(browser, month, from_month, format):
         if format == 'json':
             print('\n]')
     else:
-        print(format_usage_info(browser.get_usage_info(month), format))
+        print(format_usage_info(browser.get_usage_info(month), format,
+                                remaining))
 
 
 def main():
